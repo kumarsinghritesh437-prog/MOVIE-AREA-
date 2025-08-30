@@ -1,0 +1,67 @@
+import logging
+from pyrogram import Client, filters
+import requests
+
+# ====== Config ======
+API_ID = 20035684
+API_HASH = "987a8b7ee93d55e76bb29fce4d8ebf52"
+BOT_TOKEN = "8315587555:AAEB8hCCcXn_FN6SHWyUA_ZWuMWcZf6V8ts"
+
+SHORTLINK_URL = "earnlinks.in"
+SHORTLINK_API = "ef9e633750559cdcc7b4dc6e544b53370a5116f0"
+
+# 🔹 Put your movie channel/group ID here
+# Example: -1001234567890
+FILE_STORE = -1001234567890
+# ====================
+
+logging.basicConfig(level=logging.INFO)
+
+app = Client(
+    "AutoFilterBot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN
+)
+
+def shortlink(url: str) -> str:
+    """Shorten links using Earnlinks API"""
+    try:
+        api = f"https://{SHORTLINK_URL}/api"
+        r = requests.get(api, params={"api": SHORTLINK_API, "url": url})
+        data = r.json()
+        if data.get("status") == "success":
+            return data["shortenedUrl"]
+        return url
+    except Exception as e:
+        logging.error(f"Shortener error: {e}")
+        return url
+
+@app.on_message(filters.command("start"))
+async def start(client, message):
+    await message.reply_text(
+        "👋 Hello! I am your Auto Filter Movie Bot with Earnlinks shortener.\n\n"
+        "Send me a movie name and I’ll try to find it from my database 📂."
+    )
+
+@app.on_message(filters.text & ~filters.command("start"))
+async def filter_files(client, message):
+    query = message.text.lower()
+    results = []
+
+    async for msg in app.search_messages(FILE_STORE, query=query, filter="document"):
+        file_name = msg.document.file_name if msg.document else "File"
+        file_id = msg.document.file_id
+        file_url = await app.export_chat_invite_link(FILE_STORE)  # Channel invite
+        short_url = shortlink(file_url)
+        results.append(f"📂 {file_name}\n🔗 {short_url}")
+
+        if len(results) >= 5:  # limit results
+            break
+
+    if results:
+        await message.reply_text("\n\n".join(results))
+    else:
+        await message.reply_text("❌ No results found. Try another name.")
+
+app.run()
